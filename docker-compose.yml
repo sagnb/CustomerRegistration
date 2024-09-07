@@ -1,0 +1,56 @@
+services:
+  mongo-customer:
+    container_name: mongo-customer
+    image: mongo:latest
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'host.docker.internal:27017'}]}) }" | mongosh --port 27017 --quiet
+      interval: 5s
+      timeout: 30s
+      start_period: 0s
+      start_interval: 1s
+      retries: 30
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-customer-volume:/data/db
+      - mongodb-customer-config:/data/configdb
+    restart: always
+
+  api-customer:
+    container_name: api-customer
+    build: ./backend
+    restart: always
+    ports:
+      - "3333:3333"
+    depends_on:
+      - mongo-customer
+    env_file:
+      - ./backend/.env
+
+  spa-customer:
+    container_name: spa-customer
+    build: ./frontend
+    depends_on:
+      - api-customer
+    volumes:
+      - spa-volume:/var/www/html
+
+  nginx-customer:
+    container_name: nginx-customer
+    build: ./nginx
+    ports:
+      - "80:80"
+    volumes:
+      - spa-volume:/var/www/html
+    depends_on:
+      - mongo-customer
+      - api-customer
+      - spa-customer
+
+volumes:
+  mongodb-customer-volume:
+  mongodb-customer-config:
+  spa-volume:
